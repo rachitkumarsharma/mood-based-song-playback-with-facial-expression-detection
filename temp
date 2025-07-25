@@ -1,0 +1,15 @@
+Validation 
+
+verification 
+
+authentication 
+
+authorization 
+
+
+
+
+/register
+/login
+/user [protected]
+/logout

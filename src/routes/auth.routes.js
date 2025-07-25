@@ -1,99 +1,108 @@
-const express = require("express")
-const userModel = require("../models/user.model")
+const express = require('express');
+const userModel = require('../models/user.model');
 const jwt = require("jsonwebtoken")
 
-const router = express.Router()
+const router = express.Router();
 
+/* POST /register req.body = {username,password} */
 
-
-/* 
-
-POST /register
-POST /login
-GET /user
-GET /logout
-
-
-*/
 
 
 router.post('/register',async (req,res)=>{
+    const {username,password} = req.body
 
-    const {username,password} = req.body 
-    
-
-    const user = await userModel.create({
-        username,password
+    const isUserAlreadyExists = await userModel.findOne({
+        username
     })
 
-    const token = jwt.sign({
-        id:user._id,
-    },process.env.JWT_SECRET)
+    if(isUserAlreadyExists){
+        return res.status(409).json({
+            message:"username already in use"
+        })
+    }
 
-    res.cookie("token",token)
-    
+    const user = await userModel.create({username,password})
+
+    const token = jwt.sign({id:user._id},process.env.JWT_SECRET)
+
+    res.cookie("chacha",token,{
+        expires: new Date(Date.now() + 1000 * 60 * 60 * 24 * 7), // 7 days
+    })
+
     res.status(201).json({
         message:"user registered successfully",
         user
     })
-    
-})
-
-router.post('/login',async(req,res)=>{
-    const {username,password} = req.body
-
-    const user = await userModel.findOne({
-        username:username
-    })
-
-    if(!user){
-       return res.status(401).json({
-            message:"user account not found [ invalid username ]"
-        })
-    }
-
-    const isPasswordValid = password == user.password
-
-    if(!isPasswordValid){
-        return res.status(401).json({
-            message :"Invalid password"
-        })
-    }
-
-    res.status(200).json({
-        message:"user loggedIn successfully"
-    })
 })
 
 
-router.get('/user',async (req,res)=>{
-    const {token} = req.cookies
+router.get('/user',async(req,res)=>{
+
+    const token  = req.cookies.chacha
 
     if(!token){
         return res.status(401).json({
-            message:"Unauthorized"
+            message:"unauthorized token not found"
         })
     }
 
     try{
         const decoded = jwt.verify(token , process.env.JWT_SECRET)
-
-        const user= await userModel.findOne({
+        
+        const user = await userModel.findOne({
             _id:decoded.id
-        }).select("-password -__v")
+        })
 
-        res.status(200).json({
+        return res.status(200).json({
             message:"user data fetched successfully",
             user
         })
         
     }catch(err){
-        return res.status(401).json({
-            message:"Unauthorized - Invalid token"
+        res.status(401).json({
+            message:"Unauthorized invalid token"
         })
     }
-    // send user data
 })
 
 
-module.exports = router
+router.post('/login',async(req,res)=>{
+    const {username,password} = req.body
+
+    const user = await userModel.findOne({username})
+
+    if(!user){
+        return res.status(404).json({
+            message:"user account not found"
+        })
+    }
+
+    const isPasswordValid = user.password === password
+
+    if(!isPasswordValid){
+        return res.status(401).json({
+            message:"Invalid password"
+        })
+    }
+
+    const token = jwt.sign({id:user._id},process.env.JWT_SECRET)
+
+    res.cookie("chacha",token,{
+        expires: new Date(Date.now() + 1000 * 60 * 60 * 24 * 7), // 7 days
+    })
+
+    res.status(200).json({
+        message:"user logged in successfully",
+        user
+    })
+})
+
+router.get('/logout',(req,res)=>{
+    res.clearCookie("chacha")
+
+    res.status(200).json({
+        message:"user logged out successfully"
+    })
+})
+
+module.exports = router;
